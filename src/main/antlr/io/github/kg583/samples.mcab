@@ -1,0 +1,250 @@
+event prevent_unlinked_portals {
+	when minecraft:location {
+		"player": [
+			{
+				"condition": "minecraft:entity_properties",
+				"entity": "this",
+				"predicate": {
+					"location": {
+						"block": {
+							"blocks": [
+								"minecraft:nether_portal"
+							]
+						}
+					}
+				}
+			}
+		]
+	} and minecraft:location {
+		"player": [
+			{
+				"condition": "minecraft:inverted",
+				"term": {
+					"condition": "minecraft:reference",
+					"name": "minecraft:structure/ruined_portal"
+				}
+			}
+		]
+	} execute at @s unless entity @static.portal[distance=..5] run {
+		setblock |~ ~ ~| minecraft:air destroy
+	}
+}
+
+
+event wither {
+	when minecraft:summoned_entity {
+		"entity": {
+			"location": {
+				"dimension": "minecraft:overworld"
+			},
+			"type": "minecraft:wither"
+		}
+	} or minecraft:summoned_entity {
+		"entity": {
+			"location": {
+				"dimension": "minecraft:the_end"
+			},
+			"type": "minecraft:wither"
+		}
+	} schedule 225t append {
+		execute as @e[type=minecraft:wither,limit=1] at @s run {
+			# Effects
+			particle minecraft:damage_indicator |~ ~ ~| 1 1 1 1 100 force
+			tp @s |~ -128 ~|
+			data modify entity @s Health set value 0s
+
+			# Text
+			tellraw @a[distance=..32] with random from [
+				{"text":"This dimension is not my own...","italic":true,"color":"dark_red"},
+				{"text":"I cannot manifest in this place...","italic":true,"color":"dark_red"},
+				{"text":"I must be summoned in the realm of fire...","italic":true,"color":"dark_red"},
+				{"text":"This place is not fit for my being...","italic":true,"color":"dark_red"}
+			]
+		}
+	}
+}
+
+function skyfall {
+	takes {
+		x: Int,
+		z: Int,
+	} run {
+		tp @s $(x) 666 $(z)
+		effect give @s minecraft:resistance 14 126 true
+	}
+}
+
+event activate_beacon_spawn {
+	when minecraft:construct_beacon {
+		"construct_beacon": {
+			"conditions": {
+				"level": 4
+			},
+			"trigger": "minecraft:construct_beacon"
+		}
+	} run {
+		data modify storage beacons SpawnPos set value {}
+		data modify storage beacons SpawnPos.x set from entity @s Pos[0]
+		data modify storage beacons SpawnPos.y set from entity @s Pos[1]
+		data modify storage beacons SpawnPos.z set from entity @s Pos[2]
+	}
+}
+
+
+event respawn_with_beacon {
+	when minecraft:tick {
+			"player": [
+				{
+					"condition": "minecraft:entity_properties",
+					"entity": "this",
+					"predicate": {
+						"location": {
+							"dimension": "minecraft:the_end",
+							"position": {
+								"y": {
+									"max": -50
+								}
+							}
+						}
+					}
+				}
+			]
+	} and minecraft:tick {
+		"player": [
+			{
+				"condition": "minecraft:entity_properties",
+				"entity": "this",
+				"predicate": {
+					"nbt": "{LastDeathLocation:{'dimension':'minecraft:the_end'}}",
+					"type_specific": {
+						"type": "player",
+						"stats": [
+							{
+								"type": "minecraft:custom",
+								"stat": "minecraft:time_since_death",
+								"value": 1
+							}
+						]
+					}
+				}
+			}
+		]
+	} run {
+		execute if data storage beacons SpawnPos {
+			in minecraft:overworld run function skyfall with storage beacons SpawnPos
+		} else {
+			in minecraft:the_end run function enter_end
+		}
+	}
+}
+
+
+event enter_end {
+	when minecraft:changed_dimension {
+		"from": "minecraft:overworld",
+		"to": "minecraft:the_end"
+	} run {
+		function skyfall with {x:2000, z:2000}
+		fill [1998 99 1998] [2002 99 2002] minecraft:obsidian
+
+		execute unless tag @s progress.travel.end run schedule append {
+			execute as @a at @s (
+				unless tag @s progress.travel.end
+				and unless nbt @s {OnGround:0b}
+			) run {
+				title @s title {"text":"The End","bold":true}
+				playsound music.end music @s
+				tag @s add progress.travel.end
+			}
+		}
+	}
+}
+
+
+event check_fire_protection every 1t run {
+	execute as @a at @s if dimension minecraft:the_nether {
+        store result score @s var run data get entity @s Fire
+        unless score @s var matches 1.. {
+            execute all {
+                unless data entity @s Inventory[{Slot:103b}].components."minecraft:enchantments".levels."minecraft:fire_protection"
+                unless data entity @s Inventory[{Slot:103b}].components."minecraft:enchantments"."minecraft:fire_protection"
+                unless data entity @s Inventory[{Slot:102b}].components."minecraft:enchantments".levels."minecraft:fire_protection"
+                unless data entity @s Inventory[{Slot:102b}].components."minecraft:enchantments"."minecraft:fire_protection"
+                unless data entity @s Inventory[{Slot:101b}].components."minecraft:enchantments".levels."minecraft:fire_protection"
+                unless data entity @s Inventory[{Slot:101b}].components."minecraft:enchantments"."minecraft:fire_protection"
+                unless data entity @s Inventory[{Slot:100b}].components."minecraft:enchantments".levels."minecraft:fire_protection"
+                unless data entity @s Inventory[{Slot:100b}].components."minecraft:enchantments"."minecraft:fire_protection"
+			} positioned |~ ~2.1 ~| summon minecraft:small_fireball tagged dynamic.fire_protection run data merge entity @s {Motion:[0.0d,-0.1d,0.0d]}
+		}
+	}
+
+    execute as @dynamic.fire_protection at @s unless entity @e[type=!minecraft:small_fireball,distance=..3] run kill @s
+}
+
+function lock_speaker run {
+    tag @s add dynamic.talking
+    execute at @s align y summon minecraft:marker tagged static.talking
+}
+
+event dialogue every 1t run {
+	execute as @dynamic.talking at @s run {
+		# Lock speakers
+		execute as @static.talking[distance=..1,limit=1,sort=nearest] run {
+			$(x) = @s:Pos[0]
+            $(y) = @s:Pos[1]
+	        $(z) = @s:Pos[2]
+
+	        tp @s $(x) $(y) $(z) facing entity @p
+		}
+
+		# Unlock conditions
+		execute {
+			if block |~ ~-1 ~| minecraft:air
+			unless block |~ ~ ~| minecraft:air
+			if nbt @s {OnGround:0b}
+			if nbt @s !{HurtTime:0s}
+		} run {
+			tag @s remove dynamic.talking
+			kill @static.talking[distance=..1,limit=1,sort=nearest]
+		}
+	}
+
+	# Clean-up
+	execute as @static.talking at @s unless entity @dynamic.talking[distance=..2] run kill @s
+}
+
+function pan_camera {
+	uses {
+		#camera dummy
+		#pan_time dummy
+	} run {
+		execute as @static.intro.camera if @s[:intro.camera] = camera at @s run {
+			spectate @s @dynamic.intro
+			tag @s add :intro.camera.current
+			#pan_time = storage :intro camera_times[$(camera)]
+			function move_camera
+		}
+	}
+}
+
+function move_camera {
+	uses {
+		#pan_time dummy
+		#camera dummy
+	} run {
+		if #pan_time > 0 {
+			tp @:intro.cammera.current ^.05 ^-.1 ^
+			#pan_time -= 1
+			function move_camera
+		} else {
+			tag @s remove :intro.camera.current
+			#camera += 1
+			function pan_camera
+		}
+	}
+}
+
+
+@s[][score]
+@s:nbt
+@s::tag

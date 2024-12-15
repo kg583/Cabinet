@@ -1,0 +1,38 @@
+{
+	"schemaVersion": 1,
+	"id": "cabinet",
+	"version": "${version}",
+	"name": "Cabinet",
+	"description": "An mcfunction language superset and developer tool",
+	"authors": [
+		"kg583"
+	],
+	"contact": {
+		"sources": "https://github.com/kg583/Cabinet"
+	},
+	"license": "Unlicense",
+	"icon": "assets/cabinet/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"io.github.kg583.Cabinet"
+		],
+		"client": [
+			"io.github.kg583.CabinetClient"
+		]
+	},
+	"accessWidener": "cabinet.accesswidener",
+	"mixins": [
+		"cabinet.mixins.json",
+		{
+			"config": "cabinet.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.16.9",
+		"minecraft": "~1.21.4",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
